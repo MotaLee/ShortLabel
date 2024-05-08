@@ -29,7 +29,7 @@ class Tracker(object):
 
     def track(self, image):
         if not self.FlagEnable:
-            return
+            return False, None
         success, roi = self.Tracker.update(image)
         if success:
             self.ROI = [int(v) for v in roi]

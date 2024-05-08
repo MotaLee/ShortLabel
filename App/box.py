@@ -51,6 +51,7 @@ class LabelBox(qtw.QLabel):
         self.setGeometry(x, y, w, h)
         self.FlagUsed = True
         self.Handle.setStyleSheet(f"QLabel{{background-color:{color};}}")
+        self.setMouseTracking(True)
         self.show()
         return
 
@@ -63,21 +64,26 @@ class LabelBox(qtw.QLabel):
             "background-color:rgba(0,0,0,0)"
             "}"
         )
+        self.Handle.setStyleSheet(f"QLabel{{background-color:{color};}}")
         return
 
     def mousePressEvent(self, ev: qtg.QMouseEvent):
+        self.FlagPressed = True
+        self.Pos = ev.pos()
         if self.FlagIn:
-            self.FlagPressed = True
-            self.Pos = ev.pos()
             return
 
         if self.FlagSelected:
-            self.select(False)
+            # self.select(False)
+            pass
         else:
             self.Pos = ev.pos()
-            self.FlagPressed = True
             self.FlagIn = True
             self.Win.selectBox(self.BID, self.BoxType)
+        return
+
+    def mouseReleaseEvent(self, ev: qtg.QMouseEvent):
+        self.FlagPressed = False
         return
 
     def mouseMoveEvent(self, ev: qtg.QMouseEvent):
@@ -123,10 +129,6 @@ class LabelBox(qtw.QLabel):
             self.Win.Frame.changeBack("Unsaved")
         return
 
-    def mouseReleaseEvent(self, ev: qtg.QMouseEvent):
-        self.FlagPressed = False
-        return
-
     def leaveEvent(self, a0: qtc.QEvent):
         self.FlagPressed = False
         self.FlagIn = False
@@ -135,7 +137,6 @@ class LabelBox(qtw.QLabel):
         return
 
     def select(self, flag=True):
-        self.setMouseTracking(flag)
         self.FlagSelected = flag
         line = "solid" if self.BoxType == "Label" else "dashed"
         t = 3 if flag else 2
@@ -192,7 +193,12 @@ class LabelBox(qtw.QLabel):
         self.Label = label
         color = self.Win.getColorByLabel(label)
         self.setColor(color)
+        self.select(True)
         self.Win.Frame.changeBack("Unsaved")
         return
+
+    def hide(self):
+        self.FlagSelected = False
+        return super().hide()
 
     pass

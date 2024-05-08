@@ -79,11 +79,12 @@ class TrackLabel(object):
         else:
             r = range(index, self.Video.Index)
             r = reversed(r)
+
         for i in r:
             img = self.Video.readFrame(i)
             for tid, tracker in self.DictTracker.items():
                 tracker: Tracker
-                success, roi = tracker.track(img)
+                tracker.track(img)
         return img
 
     def editLabel(self, label, name):
@@ -195,10 +196,25 @@ class TrackLabel(object):
                 x = x / vw * sw
                 y = y / vh * sh + (self.FrameHeight - sh) / 2
             else:
-                y = y / vh * sh
                 x = x / vw * sw + (self.FrameWidth - sw) / 2
+                y = y / vh * sh
             w = w / vw * sw
             h = h / vh * sh
+        return int(x), int(y), int(w), int(h)
+
+    def cvtoImageRect(self, x, y, w, h):
+        vw = self.Video.Width
+        vh = self.Video.Height
+        sw = self.ScaledWidth
+        sh = self.ScaledHeight
+        if sw > sh:
+            x = x * vw / sw
+            y = (y - (self.FrameHeight - sh) / 2) * vh / sh
+        else:
+            x = (x - (self.FrameWidth - sw) / 2) * vw / sw
+            y = y * vh / sh
+        w = w * vw / sw
+        h = h * vh / sh
         return int(x), int(y), int(w), int(h)
 
     pass

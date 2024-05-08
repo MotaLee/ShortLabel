@@ -77,6 +77,7 @@ class ImageFrame(qtw.QFrame):
             self.StartX = ev.pos().x()
             self.StartY = ev.pos().y()
             self.setTodoBox()
+            self.BoxTodo.setGeometry(self.StartX, self.StartY, 0, 0)
             self.BoxTodo.show()
         elif VTLC.Status == "EndPoint":
             mx = ev.pos().x()
@@ -92,6 +93,7 @@ class ImageFrame(qtw.QFrame):
             self.StartX = ev.pos().x()
             self.StartY = ev.pos().y()
             self.setTodoBox("dashed")
+            self.BoxTodo.setGeometry(self.StartX, self.StartY, 0, 0)
             self.BoxTodo.show()
         elif VTLC.Status == "EndTrack":
             self.setToolTip(None)
@@ -115,7 +117,9 @@ class ImageFrame(qtw.QFrame):
                     bid = box.BID
                     break
 
-            self.Win.addTrackItem(bid, label, box.getBoxRect(False))
+            rect = box.getBoxRect(False)
+            rect = VTLC.cvtoImageRect(*rect)
+            self.Win.addTrackItem(bid, label, rect)
             self.Win.onCancel()
         return
 
@@ -143,6 +147,8 @@ class ImageFrame(qtw.QFrame):
             color = "#2e2"
         elif status == "Verified":
             color = "#6cf"
+        elif status == "Removed":
+            color = "#f30"
         if color != self.ColorBorder:
             self.ColorBorder = color
             self.setStyleSheet(
@@ -230,6 +236,10 @@ class TLMenu(qtw.QMenuBar):
         self.ActSave.setShortcut("S")
         self.ActSave.triggered.connect(self.Win.onSave)
 
+        self.ActRmv = qtg.QAction("移除", self)
+        self.ActRmv.setShortcut("W")
+        self.ActRmv.triggered.connect(self.onRemove)
+
         self.ActVerify = qtg.QAction("校对", self)
         self.ActVerify.setShortcut("V")
         self.ActVerify.triggered.connect(self.onVerify)
@@ -288,6 +298,7 @@ class TLMenu(qtw.QMenuBar):
         self.MenuEdit.addAction(self.ActPrev)
         self.MenuEdit.addAction(self.ActLabel)
         self.MenuEdit.addAction(self.ActSave)
+        self.MenuEdit.addAction(self.ActRmv)
         self.MenuEdit.addAction(self.ActDel)
         self.MenuEdit.addAction(self.ActPlay)
         self.MenuEdit.addSeparator()
@@ -351,6 +362,18 @@ class TLMenu(qtw.QMenuBar):
             self.Win.Frame.setCursor(Qt.CursorShape.CrossCursor)
             VTLC.Status = "StartTrack"
             self.Win.Frame.hideAllBox()
+        return
+
+    def onRemove(self):
+        txt = f"{VTLC.VideoFolder}/labels/{VTLC.Video.Index}.txt"
+        img = f"{VTLC.VideoFolder}/labels/{VTLC.Video.Index}.jpg"
+        if os.path.exists(txt):
+            os.remove(txt)
+        if os.path.exists(img):
+            os.remove(img)
+        if VTLC.Video.Index in VTLC.Option["Verified"]:
+            VTLC.Option["Verified"].remove(VTLC.Video.Index)
+        self.Win.Frame.changeBack("Removed")
         return
 
     pass
@@ -470,14 +493,16 @@ class TLWindow(qtw.QMainWindow):
         for box in self.Frame.ListBox:
             if box.FlagUsed:
                 if self.FlagDispLabel:
+                    box.select(False)
                     box.show()
                 else:
                     box.hide()
             else:
                 box.hide()
         for box in self.Frame.ListTrack:
-            if box.FlagUsed:
+            if box.FlagUsed and VTLC.DictTracker[box.BID].FlagEnable:
                 if self.FlagDispTrack:
+                    box.select(False)
                     box.show()
                 else:
                     box.hide()
@@ -557,7 +582,9 @@ class TLWindow(qtw.QMainWindow):
             self.Frame.changeBack("None")
 
         for tid, tracker in VTLC.DictTracker.items():
-            self.Frame.ListTrack[tid].useBox(*VTLC.cvtoFrameRect(*tracker.ROI))
+            box: LabelBox = self.Frame.ListTrack[tid]
+            if tracker.FlagEnable and box.FlagUsed:
+                box.useBox(*VTLC.cvtoFrameRect(*tracker.ROI))
         return
 
     def onAcept(self, idx=-1):
@@ -598,8 +625,9 @@ class TLWindow(qtw.QMainWindow):
             if found:
                 self.showImage(VTLC.readImage(i, True))
         else:
-            if i != VTLC.Video.Count - 1:
-                self.showImage(VTLC.readImage(i + self.Speed))
+            i = i + self.Speed
+            if i <= VTLC.Video.Count - 1:
+                self.showImage(VTLC.readImage(i))
         self.FlagDeal = False
         return
 
@@ -622,8 +650,9 @@ class TLWindow(qtw.QMainWindow):
             if found:
                 self.showImage(VTLC.readImage(i, True))
         else:
-            if i != 0:
-                self.showImage(VTLC.readImage(i - self.Speed))
+            i = i - self.Speed
+            if i >= 0:
+                self.showImage(VTLC.readImage(i))
         self.FlagDeal = False
         return
 
@@ -653,8 +682,10 @@ class TLWindow(qtw.QMainWindow):
         if VTLC.IdxLabel != -1:
             self.Frame.deleteBox(VTLC.IdxLabel)
         elif VTLC.IdxTrack != -1:
-            self.QListTracker.removeItemWidget(self.ItemTracker[VTLC.IdxTrack].Item)
-            self.Frame.deleteBox(VTLC.IdxTrack, "Tracker")
+            idx = int(VTLC.IdxTrack)
+            self.QListTracker.removeItemWidget(self.ItemTracker[idx].Item)
+            self.Frame.deleteBox(idx, "Tracker")
+            del VTLC.DictTracker[idx]
         return
 
     def onCancel(self):
@@ -729,8 +760,10 @@ class TLWindow(qtw.QMainWindow):
         return name
 
     def onClickLabelList(self):
-        item: LabelItem = self.ItemLabel[self.QListLabel.currentRow()]
-        self.LabelCurrent.setText("当前：" + item.LabelIndex.text())
+        c = self.QListLabel.currentRow()
+        if 0 <= c <= len(self.ItemLabel) - 1:
+            item: LabelItem = self.ItemLabel[c]
+            self.LabelCurrent.setText("当前：" + item.LabelIndex.text())
         return
 
     def onSave(self):

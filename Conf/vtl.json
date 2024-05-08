@@ -1,6 +1,6 @@
 {
-    "IgnoreFrame":[],
-    "ClassLabel":[0,2],
-    "ClassName":["Pin","PinBlock"]
+    "Verified":[],
+    "ClassLabel":[0],
+    "ClassName":["Label"]
 
 }
