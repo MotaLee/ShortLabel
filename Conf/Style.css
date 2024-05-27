@@ -1,0 +1,20 @@
+ClipHandle{
+    background-color: #fff;
+    border:1px #fff solid;
+}
+ClipHandle:hover{
+    background-color: #3b2;
+}
+
+QFrame#FrameImage[Back="None"]{
+    background-color:#555;
+    border:5px solid #000;
+}
+QFrame#FrameImage[Back="Unsaved"]{
+    background-color:#555;
+    border:5px solid #dd0;
+}
+QFrame#FrameImage[Back="Saved"]{
+    background-color:#555;
+    border:5px solid #5d0;
+}

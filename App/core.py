@@ -1,45 +1,77 @@
-import json, os, sys
+import json, os, sys, random
 import shutil
 import PyQt6.QtWidgets as qtw
+import cv2
 
 
-class TrackLabel(object):
+class CircleVariable(object):
+    def __init__(self, max, min=0):
+        self.Value = min
+        self.Min = min
+        self.Max = max
+        return
+
+    def next(self):
+        if self.Value + 1 > self.Max:
+            self.Value = self.Min
+        else:
+            self.Value += 1
+        return self.Value
+
+    pass
+
+
+class ShortLabelCore(object):
     def __init__(self) -> None:
-        from App import VideoControl
+        from . import VideoControl
 
         self.Video: VideoControl = None
         self.VideoName = ""
         self.VideoFolder = ""
+
+        self.TrackerMethod = "KCF"
+
         self.CW = 720
         self.CH = 640
         self.Speed = 1
-        self.Option = dict()
         self.Status = "Idle"
+
         self.IdxLabel = -1
         self.IdxTrack = -1
+        self.Data = dict()
         self.DictTracker = dict()
-        self.FlagAutoSave = False
-        self.FlagVerify = False
+        self.DictColor: dict[str, str] = dict()
+
+        self.FlagWidth = True
+
         self.ScaledWidth = 0
         self.ScaledHeight = 0
         self.FrameWidth = 0
         self.FrameHeight = 0
-        self.FlagWidth = True
+
+        self.ListImage: list[int] = list()
+
         return
 
     def isOpened(self):
         return self.Video is not None
 
     def getVideoSize(self):
-        return self.Video.Width, self.Video.Height
+        pw = self.Video.Width
+        ph = self.Video.Height
+        if self.Data["Rotate"] not in {0, 2}:
+            tmp = int(ph)
+            ph = int(pw)
+            pw = int(tmp)
+
+        return pw, ph
 
     def initApp(self):
-        from App import TLWindow
+        from App import SLWindow
 
         self.App = qtw.QApplication(sys.argv)
-        self.Window = TLWindow()
-
-        self.Window.init()
+        self.Shell = SLWindow()
+        self.Shell.init()
 
         return
 
@@ -56,17 +88,21 @@ class TrackLabel(object):
         self.VideoName = path[pos + 1 : path.rfind(".")]
         self.VideoFolder = path[: path.rfind(".")]
 
-        self.updateWH()
-
         if not os.path.exists(self.VideoFolder):
             os.mkdir(self.VideoFolder)
             os.mkdir(self.VideoFolder + "/labels")
             os.mkdir(self.VideoFolder + "/images")
-            shutil.copy("./Conf/vtl.json", self.VideoFolder + "/vtl.json")
+            shutil.copy("./Conf/data.json", self.VideoFolder + "/data.json")
 
-        with open(self.VideoFolder + "/vtl.json", "r") as f:
+        self.ListImage.clear()
+        for p in os.listdir(self.VideoFolder + "/images"):
+            self.ListImage.append(int(p[: p.find(".")]))
+
+        with open("./Conf/option.json", "r") as f:
             self.Option = json.loads(f.read())
-        self.Window.loadLabels(self.Option)
+        with open(self.VideoFolder + "/data.json", "r") as f:
+            self.Data = json.loads(f.read())
+        self.updateWH()
         return True
 
     def readImage(self, index=-1, skip=False):
@@ -87,33 +123,84 @@ class TrackLabel(object):
                 tracker.track(img)
         return img
 
-    def editLabel(self, label, name):
-        for i in range(len(self.Option["ClassLabel"])):
-            if label == self.Option["ClassLabel"][i]:
-                self.Option["ClassName"][i] = name
-                break
+    def saveImage(self, lines):
+        if self.Video.Index not in self.ListImage:
+            self.ListImage.append(self.Video.Index)
+            self.ListImage.sort()
+
+        img_name = self.getPath()
+        lbl_name = self.getPath(img=False)
+        if self.Data["Rotate"] == 1:
+            img = cv2.rotate(self.Video.Frame, cv2.ROTATE_90_CLOCKWISE)
+        elif self.Data["Rotate"] == 2:
+            img = cv2.rotate(self.Video.Frame, cv2.ROTATE_180)
+        elif self.Data["Rotate"] == 3:
+            img = cv2.rotate(self.Video.Frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+        else:
+            img = self.Video.Frame
+        if self.Data["FlagClip"]:
+            x, y, w, h = self.Data["Clip"]
+            img = img[y : y + h, x : x + w]
+        cv2.imwrite(img_name, img)
+
+        with open(lbl_name, "w") as fd:
+            fd.writelines(lines)
+        return
+
+    def removeImage(self, index=-1):
+        if index == -1:
+            index = self.Video.Index
+
+        if index in self.ListImage:
+            self.ListImage.remove(index)
+
+        txt = self.getPath(img=False)
+        img = self.getPath()
+        if os.path.exists(txt):
+            os.remove(txt)
+        if os.path.exists(img):
+            os.remove(img)
+        if index in self.Data["Verified"]:
+            self.Data["Verified"].remove(index)
+        return
+
+    def findNextImage(self, index, next=True):
+        i = -1
+        if next:
+            for i in self.ListImage:
+                if i > index:
+                    break
+        else:
+            for i in reversed(self.ListImage):
+                if i < index:
+                    break
+        return i
+
+    def editLabel(self, index, label):
+        self.Data["Class"][str(index)] = label
         self.saveOption()
         return
 
     def addLabel(self):
-        label = max(self.Option["ClassLabel"]) + 1
-        self.Option["ClassLabel"].append(label)
-        self.Option["ClassName"].append("Label")
+        l = [int(k) for k in self.Data["Class"].keys()]
+        index = max(l) + 1
+        self.Data["Class"][str(index)] = "Label"
         self.saveOption()
         return
 
-    def delLabel(self, label):
-        for i in range(len(self.Option["ClassLabel"])):
-            if label == self.Option["ClassLabel"][i]:
-                self.Option["ClassLabel"].pop(i)
-                self.Option["ClassName"].pop(i)
-                break
+    def delLabel(self, index):
+        del self.Data["Class"][str(index)]
         self.saveOption()
         return
+
+    def getLabel(self, index=-1):
+        return self.Data["Class"][str(index)]
 
     def saveOption(self):
-        with open(self.VideoFolder + "/vtl.json", "w") as f:
-
+        with open(self.VideoFolder + "/data.json", "w") as f:
+            s = json.dumps(self.Data, indent=4)
+            f.write(s)
+        with open("./Conf/option.json", "w") as f:
             s = json.dumps(self.Option, indent=4)
             f.write(s)
         return
@@ -131,37 +218,31 @@ class TrackLabel(object):
         self.DictTracker[tid].FlagEnable = flag
         return
 
-    def cvtoFramePos(self, x, y):
+    def cvtoImagePos(self, x, y):
+        """将视窗坐标转换为图像坐标。"""
+        # x -= 5
+        # y -= 5
         sw = self.ScaledWidth
         sh = self.ScaledHeight
         fw = self.FrameWidth
-        fh = self.FrameWidth
+        fh = self.FrameHeight
         pw, ph = self.getVideoSize()
         if self.FlagWidth:
-            k = ph / sh
-            b = k * (sh - fh) / 2
             px = int(x * pw / sw)
-            py = int(k * y + b)
+            py = int(ph / sh * (y - (fh - sh) / 2))
             if py < 0 or py > ph:
                 px = py = -1
         else:
-            k = pw / sw
-            b = k * (sw - fw) / 2
             py = int(y * ph / sh)
-            px = int(k * x + b)
+            px = int(pw / sw * (x - (fw - sw) / 2))
             if px < 0 or px > pw:
                 px = py = -1
         return px, py
 
-    def cvtoImagePos(self, x, y):
-
-        return
-
     def updateWH(self):
-        pw = self.Video.Width
-        ph = self.Video.Height
-        fw = self.Window.Frame.width()
-        fh = self.Window.Frame.height()
+        pw, ph = self.getVideoSize()
+        fw = self.Shell.Frame.Image.width()
+        fh = self.Shell.Frame.Image.height()
         self.FrameWidth = fw
         self.FrameHeight = fh
         self.FlagWidth = pw > ph
@@ -174,8 +255,8 @@ class TrackLabel(object):
         return
 
     def cvtoFrameRect(self, x, y, w, h, f=False):
-        vw = self.Video.Width
-        vh = self.Video.Height
+        """将图像框坐标转换为视窗坐标。"""
+        vw, vh = self.getVideoSize()
         sw = self.ScaledWidth
         sh = self.ScaledHeight
         if f:
@@ -183,16 +264,23 @@ class TrackLabel(object):
             fy = float(y)
             fw = float(w)
             fh = float(h)
-            if VTLC.FlagWidth:
-                x = (fx - fw / 2) * sw
-                y = (fy - fh / 2) * sh + (self.FrameHeight - sh) / 2
+            if self.Data["FlagClip"]:
+                x = (fx - fw / 2) * self.Data["Clip"][2] + self.Data["Clip"][0]
+                y = (fy - fh / 2) * self.Data["Clip"][3] + self.Data["Clip"][1]
+                w = fw * self.Data["Clip"][2]
+                h = fh * self.Data["Clip"][3]
+                x, y, w, h = self.cvtoFrameRect(x, y, w, h)
             else:
-                x = (fx - fw / 2) * sw + (self.FrameWidth - sw) / 2
-                y = (fy - fh / 2) * sh
-            w = fw * sw
-            h = fh * sh
+                if self.FlagWidth:
+                    x = (fx - fw / 2) * sw
+                    y = (fy - fh / 2) * sh + (self.FrameHeight - sh) / 2
+                else:
+                    x = (fx - fw / 2) * sw + (self.FrameWidth - sw) / 2
+                    y = (fy - fh / 2) * sh
+                w = fw * sw
+                h = fh * sh
         else:
-            if sw > sh:
+            if self.FlagWidth:
                 x = x / vw * sw
                 y = y / vh * sh + (self.FrameHeight - sh) / 2
             else:
@@ -203,8 +291,10 @@ class TrackLabel(object):
         return int(x), int(y), int(w), int(h)
 
     def cvtoImageRect(self, x, y, w, h):
-        vw = self.Video.Width
-        vh = self.Video.Height
+        # x -= 5
+        # y -= 5
+        vw, vh = self.getVideoSize()
+
         sw = self.ScaledWidth
         sh = self.ScaledHeight
         if sw > sh:
@@ -217,12 +307,36 @@ class TrackLabel(object):
         h = h * vh / sh
         return int(x), int(y), int(w), int(h)
 
+    def getColor(self, label):
+        if label not in self.DictColor:
+            color = f"hsv({str(random.randint(0,254))},200,200)"
+            self.DictColor[label] = color
+        return self.DictColor[label]
+
+    def getClass(self, i):
+        return self.Data["Class"][str(i)]
+
+    def getPath(self, frame=-1, img=True):
+        if frame == -1:
+            frame = self.Video.Index
+        i = str(frame).rjust(4, "0")
+        if img:
+            ret = f"{self.VideoFolder}/images/{i}.jpg"
+        else:
+            ret = f"{self.VideoFolder}/labels/{i}.txt"
+        return ret
+
     pass
 
 
-VTLC = TrackLabel()
+SLC = ShortLabelCore()
 
 
 def getCore():
-    global VTLC
-    return VTLC
+    global SLC
+    return SLC
+
+
+def getShell():
+    global SLC
+    return SLC.Shell

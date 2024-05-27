@@ -1,13 +1,28 @@
-# 追踪标注助手 - TrackLabel
+# 快捷标注助手 - ShortLabel
 
 ## 简介 - Introduction
-追踪标注助手基于opencv的视频追踪来生成标注框。
-所有操作均可使用快捷键完成，大幅提高效率。
+快捷标注助手秉持所有操作均可使用快捷键完成的理念，大幅提高效率。
+
+包含功能有：
+- 视频追踪：基于opencv的视频追踪来生成标注框。
+
 GUI界面采用pyqt6制作。
 
-TrackLabel is an application for labeling video by using opencv tracking methods.
+ShortLabel is an application for labeling video.
 All operations can use the shortcuts to improve efficiency.
+
+Including:
+- Video tracking: based on opencv tracking method to generate label box.
+
 GUI is based on PyQt6.
+
+## 更新 - Update
+### 20240527 - 1.1.0
+- 新增图像旋转和裁剪功能。
+- 优化GUI逻辑。
+- 为模板标注功能做准备。
+- 新增下一保存帧的提示。
+- 新增已标注框和图片文件的列表显示。
 
 ## 安装 - Installation
 - 安装Python，版本>=3.9。
@@ -15,7 +30,7 @@ GUI is based on PyQt6.
 ```
 pip install -r ./Conf/requirements.txt
 ```
-- 安装完成后点击[VTL.cmd](./VTL.cmd)启动应用。
+- 安装完成后点击[ShortLabel.cmd](./ShortLabel.cmd)启动应用。
 
 ---
 
@@ -24,7 +39,7 @@ pip install -r ./Conf/requirements.txt
 ```
 pip install -r ./Conf/requirements.txt
 ```
-- Launch application via [VTL.cmd](./VTL.cmd).
+- Launch application via [ShortLabel.cmd](./ShortLabel.cmd).
 
 
 ## 操作 - Operation Guide

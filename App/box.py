@@ -6,22 +6,21 @@ import functools as ft
 
 from . import getCore
 
-VTLC = getCore()
+SLC = getCore()
 
 
 class LabelBox(qtw.QLabel):
     def __init__(self, parent, bid, box_type="Label"):
         super().__init__(parent)
-        from . import TLWindow
-
-        self.Win: TLWindow = parent.parent().parent()
         self.BID = bid
         self.Color = ""
+
         self.FlagSelected = False
         self.FlagDrag = False
         self.FlagUsed = False
         self.FlagPressed = False
         self.FlagIn = False
+
         self.Pos = None
         self.Label = -1
         self.BoxType = box_type
@@ -45,6 +44,7 @@ class LabelBox(qtw.QLabel):
             color = self.Color
         if label is None:
             label = self.Label
+
         self.Label = label
         self.Color = color
         self.setColor(color)
@@ -67,7 +67,18 @@ class LabelBox(qtw.QLabel):
         self.Handle.setStyleSheet(f"QLabel{{background-color:{color};}}")
         return
 
+    def getRect(self):
+        rect = [
+            self.geometry().x(),
+            self.geometry().y(),
+            self.geometry().width(),
+            self.geometry().height(),
+        ]
+        return rect
+
+    # 本体事件。
     def mousePressEvent(self, ev: qtg.QMouseEvent):
+        SLS = SLC.Shell
         self.FlagPressed = True
         self.Pos = ev.pos()
         if self.FlagIn:
@@ -79,7 +90,7 @@ class LabelBox(qtw.QLabel):
         else:
             self.Pos = ev.pos()
             self.FlagIn = True
-            self.Win.selectBox(self.BID, self.BoxType)
+            SLS.selectBox(self.BID, self.BoxType)
         return
 
     def mouseReleaseEvent(self, ev: qtg.QMouseEvent):
@@ -87,13 +98,14 @@ class LabelBox(qtw.QLabel):
         return
 
     def mouseMoveEvent(self, ev: qtg.QMouseEvent):
+        SLS = SLC.Shell
         if self.FlagPressed:
             pos = ev.pos()
             x = self.pos().x() - self.Pos.x() + pos.x()
             y = self.pos().y() - self.Pos.y() + pos.y()
             self.move(x, y)
             if self.BoxType == "Label":
-                self.parent().changeBack("Unsaved")
+                SLS.changeBack("Unsaved")
 
         mx = ev.pos().x()
         my = ev.pos().y()
@@ -106,6 +118,14 @@ class LabelBox(qtw.QLabel):
             self.Handle.hide()
         return
 
+    def leaveEvent(self, a0: qtc.QEvent):
+        self.FlagPressed = False
+        self.FlagIn = False
+        self.FlagDrag = False
+        self.Handle.hide()
+        return
+
+    # 手柄事件。
     def onPressHandle(self, ev: qtg.QMouseEvent):
         self.FlagDrag = True
         self.SX = ev.pos().x()
@@ -117,6 +137,7 @@ class LabelBox(qtw.QLabel):
         return
 
     def onDragHandle(self, ev: qtg.QMouseEvent):
+        SLS = SLC.Shell
         if self.FlagDrag:
             sx = ev.pos().x()
             sy = ev.pos().y()
@@ -126,14 +147,7 @@ class LabelBox(qtw.QLabel):
             h = self.geometry().height() + sy - self.SY
             self.Handle.setGeometry(w - 20, h - 20, 20, 20)
             self.setGeometry(x, y, w, h)
-            self.Win.Frame.changeBack("Unsaved")
-        return
-
-    def leaveEvent(self, a0: qtc.QEvent):
-        self.FlagPressed = False
-        self.FlagIn = False
-        self.FlagDrag = False
-        self.Handle.hide()
+            SLS.changeBack("Unsaved")
         return
 
     def select(self, flag=True):
@@ -149,40 +163,12 @@ class LabelBox(qtw.QLabel):
         )
         return
 
-    def getBoxRect(self, f=True):
-        x = self.pos().x()
-        y = self.pos().y()
-        w = self.geometry().width()
-        h = self.geometry().height()
-        if f:
-            if VTLC.FlagWidth:
-                fx = (x + w / 2) / VTLC.ScaledWidth
-                fy = (
-                    y - (VTLC.FrameHeight - VTLC.ScaledHeight) / 2 + h / 2
-                ) / VTLC.ScaledHeight
-            else:
-                fx = (
-                    x - (VTLC.FrameWidth - VTLC.ScaledWidth) / 2 + w / 2
-                ) / VTLC.ScaledWidth
-                fy = (y + h / 2) / VTLC.ScaledHeight
-            fw = w / VTLC.ScaledWidth
-            fh = h / VTLC.ScaledHeight
-        else:
-            fx = x
-            fy = y
-            fw = w
-            fh = h
-        return fx, fy, fw, fh
-
     def onMenu(self):
         self.Menu = qtw.QMenu(self)
 
-        l = len(VTLC.Option["ClassLabel"])
-        for i in range(l):
-            label = VTLC.Option["ClassLabel"][i]
-            name = VTLC.Option["ClassName"][i]
-            act = qtg.QAction(f"{label}:{name}", self)
-            func = ft.partial(self.setLabel, label)
+        for index, label in SLC.Data["Class"].items():
+            act = qtg.QAction(f"{index}:{label}", self)
+            func = ft.partial(self.setLabel, int(index))
             act.triggered.connect(func)
             self.Menu.addAction(act)
 
@@ -190,11 +176,12 @@ class LabelBox(qtw.QLabel):
         return
 
     def setLabel(self, label):
+        SLS = SLC.Shell
         self.Label = label
-        color = self.Win.getColorByLabel(label)
+        color = SLC.getColor(label)
         self.setColor(color)
         self.select(True)
-        self.Win.Frame.changeBack("Unsaved")
+        SLS.changeBack("Unsaved")
         return
 
     def hide(self):
