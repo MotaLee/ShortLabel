@@ -70,15 +70,10 @@ class TrackItem(qtw.QWidget):
 
         super().__init__(kw.get("parent"))
 
-        self.BID = kw.get("bid")
-        self.Index = kw.get("index")
-        self.Label = kw.get("label")
-        self.Method = kw.get("method")
-        self.Color = kw.get("color")
-        self.Start = kw.get("start")
-        self.Item = kw.get("item")
         self.FlagEnable = True
 
+        if "item" in kw:
+            self.Item = kw.get("item")
         self.Item.setSizeHint(qtc.QSize(0, 30))
 
         self.setMinimumSize(150, 50)
@@ -86,36 +81,62 @@ class TrackItem(qtw.QWidget):
         self.BtnEna = qtw.QCheckBox(self)
         self.BtnEna.setChecked(True)
         self.BtnEna.setGeometry(0, 0, 20, 20)
-        self.LabelBid = qtw.QLabel(str(self.BID), self)
-        self.LabelBid.setGeometry(20, 0, 20, 20)
-        self.LabelName = qtw.QPushButton(self.Label, self)
-        self.LabelName.setGeometry(40, 0, 80, 20)
+
+        self.TxtBid = qtw.QLabel(self)
+        self.TxtBid.setGeometry(20, 0, 20, 20)
+
+        self.BtnName = qtw.QPushButton(self)
+        self.BtnName.setGeometry(40, 0, 80, 20)
         self.EditName = qtw.QLineEdit(self)
         self.EditName.setGeometry(40, 0, 80, 20)
         self.EditName.hide()
-        self.LabelColor = qtw.QLabel(self)
-        self.LabelColor.setGeometry(120, 0, 20, 20)
-        stl = f"QLabel{{background-color:{self.Color};}}"
-        self.LabelColor.setStyleSheet(stl)
-        self.LabelInfo = qtw.QLabel(f"{self.Index}/{self.Method}/{self.Start}", self)
-        self.LabelInfo.setGeometry(140, 0, 80, 20)
+
+        self.ImgColor = qtw.QLabel(self)
+        self.ImgColor.setGeometry(120, 0, 20, 20)
+
+        # self.LabelInfo = qtw.QLabel(f"{self.Index}/{self.Method}", self)
+        # self.LabelInfo.setGeometry(140, 0, 80, 20)
+
+        self.setTrackItem(**kw)
 
         self.BtnEna.checkStateChanged.connect(self.onEnable)
-        self.LabelName.clicked.connect(self.onEditName)
+        self.BtnName.clicked.connect(self.onEditName)
         self.EditName.editingFinished.connect(self.onFinish)
         return
 
+    def setTrackItem(self, **kw):
+        if "bid" in kw:
+            self.BID = int(kw["bid"])
+            self.TxtBid.setText(str(self.BID))
+        if "index" in kw:
+            self.Index = kw.get("index")
+
+        if "method" in kw:
+            self.Method = kw.get("method")
+        if "color" in kw:
+            self.Color = kw.get("color")
+            stl = f"background-color:{self.Color};"
+            self.ImgColor.setStyleSheet(stl)
+        # self.Start = kw.get("start")
+        if "name" in kw:
+            self.Name = kw.get("name")
+        else:
+            self.Name = f"T: {SLC.getLabel(self.Index)}"
+        self.BtnName.setText(self.Name)
+
+        return
+
     def onEditName(self):
-        self.EditName.setText(self.LabelName.text())
-        self.LabelName.hide()
+        self.EditName.setText(self.BtnName.text())
+        self.BtnName.hide()
         self.EditName.show()
         return
 
     def onFinish(self):
         v = self.EditName.text()
-        self.LabelName.setText(v)
+        self.BtnName.setText(v)
         self.EditName.hide()
-        self.LabelName.show()
+        self.BtnName.show()
         return
 
     def mouseReleaseEvent(self, a0: QMouseEvent):
@@ -127,12 +148,14 @@ class TrackItem(qtw.QWidget):
         from .gui import LabelBox
 
         enable = self.BtnEna.isChecked()
-        box: LabelBox = SLC.ListTrack[self.BID]
+        box: LabelBox = SLC.Shell.ListTrack[self.BID]
         if enable:
-            box.select(True)
+            self.FlagEnable = True
+            SLC.Shell.selectBox(self.BID, "Track")
             box.show()
             SLC.enableTracker(self.BID, True)
         else:
+            self.FlagEnable = False
             box.select(False)
             box.hide()
             SLC.enableTracker(self.BID, False)

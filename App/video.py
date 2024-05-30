@@ -15,7 +15,7 @@ class Tracker(object):
         elif self.Method == "CSRT":
             func = cv2.TrackerCSRT_create
         elif self.Method == "MOSSE":
-            func = cv2.TrackerMOSSE_create
+            func = cv2.legacy.TrackerMOSSE_create
 
         self.Tracker = func()
         self.init(argkw.get("img"), self.ROI)
@@ -47,7 +47,7 @@ class VideoControl:
         self.Width = int(self.Cap.get(cv2.CAP_PROP_FRAME_WIDTH))
         self.Height = int(self.Cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
         self.Frame = None
-        self.Index = -1
+        self.Index = 0
         self.Time = self.Count / self.Fps
         self.Now = self.Index / self.Fps
         self.DictTracker = dict()
@@ -56,7 +56,7 @@ class VideoControl:
     def readFrame(self, index=-1):
         if index == -1 or self.Frame is None:
             ret, self.Frame = self.Cap.read()
-            self.Index += 1
+            # self.Index += 1
             pass
         else:
             self.Cap.set(cv2.CAP_PROP_POS_FRAMES, index)

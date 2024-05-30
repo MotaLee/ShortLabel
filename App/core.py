@@ -2,6 +2,7 @@ import json, os, sys, random
 import shutil
 import PyQt6.QtWidgets as qtw
 import cv2
+import numpy as np
 
 
 class CircleVariable(object):
@@ -29,7 +30,7 @@ class ShortLabelCore(object):
         self.VideoName = ""
         self.VideoFolder = ""
 
-        self.TrackerMethod = "KCF"
+        self.TrackerMethod = "CSRT"
 
         self.CW = 720
         self.CH = 640
@@ -43,11 +44,15 @@ class ShortLabelCore(object):
         self.DictColor: dict[str, str] = dict()
 
         self.FlagWidth = True
+        self.FlagSetMode = False
 
         self.ScaledWidth = 0
         self.ScaledHeight = 0
         self.FrameWidth = 0
         self.FrameHeight = 0
+
+        self.SetImage = None
+        self.IndexSetImage = -1
 
         self.ListImage: list[int] = list()
 
@@ -56,13 +61,23 @@ class ShortLabelCore(object):
     def isOpened(self):
         return self.Video is not None
 
-    def getVideoSize(self):
-        pw = self.Video.Width
-        ph = self.Video.Height
-        if self.Data["Rotate"] not in {0, 2}:
-            tmp = int(ph)
-            ph = int(pw)
-            pw = int(tmp)
+    def getVideoSize(self, index=-1):
+        if index == -1:
+            index = self.Video.Index
+        if self.FlagSetMode and index in self.ListImage:
+            if self.IndexSetImage != index:
+                path = self.getPath(index)
+                self.IndexSetImage = index
+                self.SetImage = cv2.imread(path)
+            pw = self.SetImage.shape[1]
+            ph = self.SetImage.shape[0]
+        else:
+            pw = self.Video.Width
+            ph = self.Video.Height
+            if self.Data["Rotate"] not in {0, 2}:
+                tmp = int(ph)
+                ph = int(pw)
+                pw = int(tmp)
 
         return pw, ph
 
@@ -102,25 +117,63 @@ class ShortLabelCore(object):
             self.Option = json.loads(f.read())
         with open(self.VideoFolder + "/data.json", "r") as f:
             self.Data = json.loads(f.read())
-        self.updateWH()
+        # self.updateWH()
         return True
 
     def readImage(self, index=-1, skip=False):
         from App import Tracker
 
-        if skip or index == -1:
-            return self.Video.readFrame(index)
-        if index > self.Video.Index:
-            r = range(self.Video.Index + 1, index + 1)
-        else:
-            r = range(index, self.Video.Index)
-            r = reversed(r)
+        self.updateWH(index)
 
-        for i in r:
-            img = self.Video.readFrame(i)
-            for tid, tracker in self.DictTracker.items():
-                tracker: Tracker
-                tracker.track(img)
+        if index == -1:
+            index = self.Video.Index
+
+        if self.FlagSetMode and index in self.ListImage:
+            img = np.copy(self.SetImage)
+            self.Video.Index = index
+        else:
+            if skip or index == self.Video.Index:
+                img = self.Video.readFrame(index)
+            else:
+                if index > self.Video.Index:
+                    r = range(self.Video.Index + 1, index + 1)
+                else:
+                    r = range(index, self.Video.Index)
+                    r = reversed(r)
+
+                for i in r:
+                    img = self.Video.readFrame(i)
+                    for tid, tracker in self.DictTracker.items():
+                        tracker: Tracker
+                        tracker.track(img)
+
+            if self.Data["Rotate"] == 1:
+                img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
+            elif self.Data["Rotate"] == 2:
+                img = cv2.rotate(img, cv2.ROTATE_180)
+            elif self.Data["Rotate"] == 3:
+                img = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
+
+            if self.Data["FlagClip"]:
+                x, y, w, h = self.Data["Clip"]
+                img2 = (img * 0.5).astype(np.uint8)
+                img2[y : y + h, x : x + w] = img[y : y + h, x : x + w]
+                img = img2
+
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        img = cv2.resize(img, (self.ScaledWidth, self.ScaledHeight))
+
+        if self.FlagWidth:
+            h = (self.FrameHeight - self.ScaledHeight) // 2
+            img = cv2.copyMakeBorder(
+                img, h, h, 0, 0, cv2.BORDER_CONSTANT, value=[128, 128, 128]
+            )
+        else:
+            w = (self.FrameWidth - self.ScaledWidth) // 2
+            img = cv2.copyMakeBorder(
+                img, 0, 0, w, w, cv2.BORDER_CONSTANT, value=[128, 128, 128]
+            )
+
         return img
 
     def saveImage(self, lines):
@@ -130,18 +183,19 @@ class ShortLabelCore(object):
 
         img_name = self.getPath()
         lbl_name = self.getPath(img=False)
-        if self.Data["Rotate"] == 1:
-            img = cv2.rotate(self.Video.Frame, cv2.ROTATE_90_CLOCKWISE)
-        elif self.Data["Rotate"] == 2:
-            img = cv2.rotate(self.Video.Frame, cv2.ROTATE_180)
-        elif self.Data["Rotate"] == 3:
-            img = cv2.rotate(self.Video.Frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
-        else:
-            img = self.Video.Frame
-        if self.Data["FlagClip"]:
-            x, y, w, h = self.Data["Clip"]
-            img = img[y : y + h, x : x + w]
-        cv2.imwrite(img_name, img)
+        if not self.FlagSetMode:
+            if self.Data["Rotate"] == 1:
+                img = cv2.rotate(self.Video.Frame, cv2.ROTATE_90_CLOCKWISE)
+            elif self.Data["Rotate"] == 2:
+                img = cv2.rotate(self.Video.Frame, cv2.ROTATE_180)
+            elif self.Data["Rotate"] == 3:
+                img = cv2.rotate(self.Video.Frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
+            else:
+                img = self.Video.Frame
+            if self.Data["FlagClip"]:
+                x, y, w, h = self.Data["Clip"]
+                img = img[y : y + h, x : x + w]
+            cv2.imwrite(img_name, img)
 
         with open(lbl_name, "w") as fd:
             fd.writelines(lines)
@@ -154,8 +208,8 @@ class ShortLabelCore(object):
         if index in self.ListImage:
             self.ListImage.remove(index)
 
-        txt = self.getPath(img=False)
-        img = self.getPath()
+        txt = self.getPath(index, img=False)
+        img = self.getPath(index)
         if os.path.exists(txt):
             os.remove(txt)
         if os.path.exists(img):
@@ -239,13 +293,13 @@ class ShortLabelCore(object):
                 px = py = -1
         return px, py
 
-    def updateWH(self):
-        pw, ph = self.getVideoSize()
+    def updateWH(self, index):
+        pw, ph = self.getVideoSize(index)
         fw = self.Shell.Frame.Image.width()
         fh = self.Shell.Frame.Image.height()
         self.FrameWidth = fw
         self.FrameHeight = fh
-        self.FlagWidth = pw > ph
+        self.FlagWidth = pw / ph > fw / fh
         if self.FlagWidth:
             self.ScaledWidth = fw
             self.ScaledHeight = int(ph * fw / pw)
@@ -264,7 +318,7 @@ class ShortLabelCore(object):
             fy = float(y)
             fw = float(w)
             fh = float(h)
-            if self.Data["FlagClip"]:
+            if self.Data["FlagClip"] and not self.FlagSetMode:
                 x = (fx - fw / 2) * self.Data["Clip"][2] + self.Data["Clip"][0]
                 y = (fy - fh / 2) * self.Data["Clip"][3] + self.Data["Clip"][1]
                 w = fw * self.Data["Clip"][2]
@@ -307,11 +361,13 @@ class ShortLabelCore(object):
         h = h * vh / sh
         return int(x), int(y), int(w), int(h)
 
-    def getColor(self, label):
-        if label not in self.DictColor:
-            color = f"hsv({str(random.randint(0,254))},200,200)"
-            self.DictColor[label] = color
-        return self.DictColor[label]
+    def getColor(self, index):
+        random.randint(0, 254)
+        h = 255 // len(self.Data["Class"]) * len(self.DictColor) % 255
+        if index not in self.DictColor:
+            color = f"hsv({h},200,200)"
+            self.DictColor[index] = color
+        return self.DictColor[index]
 
     def getClass(self, i):
         return self.Data["Class"][str(i)]
@@ -319,7 +375,7 @@ class ShortLabelCore(object):
     def getPath(self, frame=-1, img=True):
         if frame == -1:
             frame = self.Video.Index
-        i = str(frame).rjust(4, "0")
+        i = str(frame).rjust(6, "0")
         if img:
             ret = f"{self.VideoFolder}/images/{i}.jpg"
         else:

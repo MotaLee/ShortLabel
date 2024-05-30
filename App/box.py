@@ -22,10 +22,13 @@ class LabelBox(qtw.QLabel):
         self.FlagIn = False
 
         self.Pos = None
-        self.Label = -1
+        self.Index = -1
         self.BoxType = box_type
         self.SX = -1
         self.SY = -1
+
+        self.TxtLabel = qtw.QLabel(self)
+        self.TxtLabel.setGeometry(0, 0, 50, 15)
 
         self.Handle = qtw.QLabel(self)
         self.Handle.mousePressEvent = self.onPressHandle
@@ -39,18 +42,20 @@ class LabelBox(qtw.QLabel):
         self.hide()
         return
 
-    def useBox(self, x, y, w, h, color=None, label=None):
+    def useBox(self, x, y, w, h, color=None, index=None):
         if color is None:
             color = self.Color
-        if label is None:
-            label = self.Label
+        if index is None:
+            index = self.Index
 
-        self.Label = label
+        self.Index = index
         self.Color = color
         self.setColor(color)
         self.setGeometry(x, y, w, h)
         self.FlagUsed = True
-        self.Handle.setStyleSheet(f"QLabel{{background-color:{color};}}")
+        self.TxtLabel.setText(SLC.getLabel(index))
+        self.Handle.setStyleSheet(f"background-color:{color};")
+        self.TxtLabel.setStyleSheet(f"background-color:{color};color:#eee;")
         self.setMouseTracking(True)
         self.show()
         return
@@ -64,7 +69,8 @@ class LabelBox(qtw.QLabel):
             "background-color:rgba(0,0,0,0)"
             "}"
         )
-        self.Handle.setStyleSheet(f"QLabel{{background-color:{color};}}")
+        self.Handle.setStyleSheet(f"background-color:{color};")
+        self.TxtLabel.setStyleSheet(f"background-color:{color};")
         return
 
     def getRect(self):
@@ -95,6 +101,9 @@ class LabelBox(qtw.QLabel):
 
     def mouseReleaseEvent(self, ev: qtg.QMouseEvent):
         self.FlagPressed = False
+        if self.BoxType == "Track":
+            rect = SLC.cvtoImageRect(*self.getRect())
+            SLC.createTracker(tid=self.BID, method=SLC.TrackerMethod, roi=rect)
         return
 
     def mouseMoveEvent(self, ev: qtg.QMouseEvent):
@@ -134,6 +143,10 @@ class LabelBox(qtw.QLabel):
 
     def onReleaseHandle(self, ev):
         self.FlagDrag = False
+
+        if self.BoxType == "Track":
+            rect = SLC.cvtoImageRect(*self.getRect())
+            SLC.createTracker(tid=self.BID, method=SLC.TrackerMethod, roi=rect)
         return
 
     def onDragHandle(self, ev: qtg.QMouseEvent):
@@ -168,20 +181,28 @@ class LabelBox(qtw.QLabel):
 
         for index, label in SLC.Data["Class"].items():
             act = qtg.QAction(f"{index}:{label}", self)
-            func = ft.partial(self.setLabel, int(index))
+            func = ft.partial(self.setIndex, int(index))
             act.triggered.connect(func)
             self.Menu.addAction(act)
 
         self.Menu.popup(qtg.QCursor.pos())
         return
 
-    def setLabel(self, label):
+    def setIndex(self, index):
         SLS = SLC.Shell
-        self.Label = label
-        color = SLC.getColor(label)
+        self.Index = index
+        color = SLC.getColor(index)
         self.setColor(color)
         self.select(True)
-        SLS.changeBack("Unsaved")
+        self.TxtLabel.setText(SLC.getLabel(self.Index))
+        if self.BoxType == "Label":
+            SLS.changeBack("Unsaved")
+        else:
+            SLC.Shell.ItemTracker[self.BID].setTrackItem(
+                color=color,
+                index=self.Index,
+            )
+
         return
 
     def hide(self):

@@ -5,9 +5,6 @@ import PyQt6.QtGui as qtg
 import PyQt6.QtCore as qtc
 from PyQt6.QtCore import Qt
 
-import cv2
-import numpy as np
-
 from . import getCore, LabelItem, TrackItem, LabelBox, CircleVariable
 from . import MainMenu
 
@@ -107,9 +104,11 @@ class SideFrame(qtw.QTabWidget):
         super().__init__(parent)
         self.TabLabel = qtw.QWidget(self)
         self.TabAdv = qtw.QWidget(self)
+        self.TabAI = qtw.QWidget(self)
 
         self.addTab(self.TabLabel, "标签")
         self.addTab(self.TabAdv, "高级")
+        self.addTab(self.TabAI, "AI")
 
         self.LblList = qtw.QLabel("标签列表", self.TabLabel)
         self.BtnAdd = qtw.QPushButton("+", self.TabLabel)
@@ -137,6 +136,14 @@ class SideFrame(qtw.QTabWidget):
         self.QListTracker = qtw.QListWidget(self.TabAdv)
         self.TxtTemplate = qtw.QLabel("模板：", self.TabAdv)
         self.QListTemplate = qtw.QListWidget(self.TabAdv)
+
+        self.TxtAI = qtw.QLabel("AI方法", self.TabAI)
+        self.CmbAI = qtw.QComboBox(self.TabAI)
+        self.CmbAI.addItem("Yolov5n")
+        self.CmbAI.addItem("Yolov5s")
+        self.CmbAI.addItem("Yolov8n")
+        self.CmbAI.addItem("GrondingDINO")
+        self.CmbAI.addItem("GrondingSAM")
 
         lol_v1 = qtw.QVBoxLayout()
         lol_h2 = qtw.QHBoxLayout()
@@ -167,7 +174,15 @@ class SideFrame(qtw.QTabWidget):
         loa_v1.addWidget(self.QListTemplate)
         self.TabAdv.setLayout(loa_v1)
 
+        loi_v1 = qtw.QVBoxLayout()
+        loi_h2 = qtw.QHBoxLayout()
+        loi_v1.addLayout(loi_h2)
+        loi_h2.addWidget(self.TxtAI)
+        loi_h2.addWidget(self.CmbAI)
+        self.TabAI.setLayout(loi_v1)
+
         self.QListLabel.clicked.connect(self.onClickLabelList)
+        self.QListImage.clicked.connect(self.onClickImageList)
         self.BtnAdd.clicked.connect(self.onAddLabel)
         self.BtnDel.clicked.connect(self.onDelLabel)
         self.BtnClip.clicked.connect(self.onClip)
@@ -179,7 +194,14 @@ class SideFrame(qtw.QTabWidget):
         c = self.QListLabel.currentRow()
         if 0 <= c <= len(SLC.Shell.ItemLabel) - 1:
             item: LabelItem = SLC.Shell.ItemLabel[c]
-            self.LblCrt.setText("当前：" + item.LabelIndex.text())
+        else:
+            item: LabelItem = SLC.Shell.ItemLabel[-1]
+        self.LblCrt.setText("当前：" + item.LabelIndex.text())
+        return
+
+    def onClickImageList(self):
+        index = int(self.QListImage.currentItem().text())
+        SLC.Shell.showImage(index, True)
         return
 
     def onAddLabel(self):
@@ -205,7 +227,7 @@ class SideFrame(qtw.QTabWidget):
                 parent=self,
                 index=int(index),
                 label=label,
-                color=SLC.getColor(index),
+                color=SLC.getColor(int(index)),
                 item=item,
             )
             self.QListLabel.setItemWidget(item, widget)
@@ -213,7 +235,7 @@ class SideFrame(qtw.QTabWidget):
             SLC.Shell.ItemLabel.append(widget)
         for box in SLC.Shell.ListBox:
             if box.FlagUsed:
-                color = SLC.getColor(box.Label)
+                color = SLC.getColor(box.Index)
                 if color is not None:
                     box.setColor(color)
 
@@ -223,15 +245,16 @@ class SideFrame(qtw.QTabWidget):
     def loadImage(self):
         self.QListImage.clear()
         for image in os.listdir(f"{SLC.VideoFolder}/images"):
-            item = qtw.QListWidgetItem(image, self.QListImage)
-            self.QListImage.addItem(item)
+            if "jpg" in image:
+                item = qtw.QListWidgetItem(image[: image.index(".")], self.QListImage)
+                self.QListImage.addItem(item)
         return
 
     def loadBox(self):
         self.QListBox.clear()
         for box in SLC.Shell.ListBox:
             if box.FlagUsed:
-                item = qtw.QListWidgetItem(str(box.Label), self.QListBox)
+                item = qtw.QListWidgetItem(str(box.Index), self.QListBox)
                 self.QListBox.addItem(item)
         return
 
@@ -242,7 +265,6 @@ class SideFrame(qtw.QTabWidget):
             x, y, int(self.InputWidth.text()), int(self.InputHeight.text())
         )
         SLC.Data["Clip"] = [*rect]
-        # SLC.Shell.setClip(rect)
         SLC.Shell.showImage()
         SLC.Shell.changeBack("Unsaved")
         return
@@ -255,7 +277,6 @@ class SideFrame(qtw.QTabWidget):
             parent=self,
             index=index,
             bid=bid,
-            label=f"Tracker: {index}",
             color=color,
             method=SLC.TrackerMethod,
             start=start,
@@ -285,6 +306,7 @@ class ImageFrame(qtw.QFrame):
         self.Image.mouseReleaseEvent = self.mouseReleaseImage
 
         self.BoxTodo = qtw.QLabel(self.Image)
+        self.BoxTodo.setMouseTracking(True)
         self.BoxTodo.hide()
 
         self.HandClip1 = ClipHandle(self.Image)
@@ -376,13 +398,14 @@ class ImageFrame(qtw.QFrame):
                     bid = box.BID
                     break
 
-            rect = [
-                box.geometry().x(),
-                box.geometry().y(),
-                box.geometry().width(),
-                box.geometry().height(),
-            ]
-            rect = SLC.cvtoImageRect(*rect)
+            # rect = [
+            #     box.geometry().x(),
+            #     box.geometry().y(),
+            #     box.geometry().width(),
+            #     box.geometry().height(),
+            # ]
+
+            rect = SLC.cvtoImageRect(*box.getRect())
             SLC.Shell.Side.addTrackItem(bid, index, rect)
             SLC.Shell.onCancel()
         return
@@ -428,6 +451,7 @@ class SLWindow(qtw.QMainWindow):
             self.hideAllBox()
         elif status == "Idle":
             SLC.Status = "Idle"
+            self.Frame.BoxTodo.hide()
             self.Frame.setCursor(Qt.CursorShape.ArrowCursor)
             self.onDisp(False)
         SLC.Status = status
@@ -539,45 +563,17 @@ class SLWindow(qtw.QMainWindow):
             self.Speed = s
         return
 
-    def showImage(self, img=None):
+    def showImage(self, vi=-1, skip=False):
         from App import cvtSec
 
-        SLC.updateWH()
+        img = SLC.readImage(vi, skip)
 
-        if img is None:
-            img = SLC.readImage(SLC.Video.Index, True)
-
-        # opencv
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-
-        if SLC.Data["Rotate"] == 1:
-            img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
-        elif SLC.Data["Rotate"] == 2:
-            img = cv2.rotate(img, cv2.ROTATE_180)
-        elif SLC.Data["Rotate"] == 3:
-            img = cv2.rotate(img, cv2.ROTATE_90_COUNTERCLOCKWISE)
-
-        if SLC.Data["FlagClip"]:
-            self.setClip(SLC.Data["Clip"])
-            x, y, w, h = SLC.Data["Clip"]
-            img2 = (img * 0.5).astype(np.uint8)
-            img2[y : y + h, x : x + w] = img[y : y + h, x : x + w]
-            img = img2
-        else:
+        if not SLC.Data["FlagClip"] or (
+            SLC.FlagSetMode and SLC.Video.Index in SLC.ListImage
+        ):
             self.setClip()
-
-        img = cv2.resize(img, (SLC.ScaledWidth, SLC.ScaledHeight))
-
-        if SLC.FlagWidth:
-            h = (SLC.FrameHeight - SLC.ScaledHeight) // 2
-            img = cv2.copyMakeBorder(
-                img, h, h, 0, 0, cv2.BORDER_CONSTANT, value=[128, 128, 128]
-            )
         else:
-            w = (SLC.FrameWidth - SLC.ScaledWidth) // 2
-            img = cv2.copyMakeBorder(
-                img, 0, 0, w, w, cv2.BORDER_CONSTANT, value=[128, 128, 128]
-            )
+            self.setClip(SLC.Data["Clip"])
 
         # pyqt5转换成自己能放的图片格式
         _image = qtg.QImage(
@@ -644,17 +640,18 @@ class SLWindow(qtw.QMainWindow):
         self.FlagDeal = True
 
         if SLC.Option["FlagAutoSave"]:
-            self.onSave()
+            if len(self.Side.QListBox.items()) > 0:
+                self.onSave()
 
         i = SLC.Video.Index
         if SLC.Option["FlagVerify"]:
             i = SLC.findNextImage(i)
             if i != -1:
-                self.showImage(SLC.readImage(i, True))
+                self.showImage(i, True)
         else:
             i = i + self.Speed
             if i <= SLC.Video.Count - 1:
-                self.showImage(SLC.readImage(i))
+                self.showImage(i)
 
         nexti = SLC.findNextImage(i)
         if nexti != -1:
@@ -669,17 +666,18 @@ class SLWindow(qtw.QMainWindow):
         self.FlagDeal = True
 
         if SLC.Option["FlagAutoSave"]:
-            self.onSave()
+            if len(self.Side.QListBox.items()) > 0:
+                self.onSave()
 
         i = SLC.Video.Index
         if SLC.Option["FlagVerify"]:
             i = SLC.findNextImage(i, False)
             if i != -1:
-                self.showImage(SLC.readImage(i, True))
+                self.showImage(i, True)
         else:
             i = i - self.Speed
             if i >= 0:
-                self.showImage(SLC.readImage(i))
+                self.showImage(i)
 
         nexti = SLC.findNextImage(i, False)
         if nexti != -1:
@@ -691,7 +689,7 @@ class SLWindow(qtw.QMainWindow):
     def onSilderGoto(self):
         index = self.VidBar.value()
         if index != SLC.Video.Index:
-            self.showImage(SLC.readImage(index, True))
+            self.showImage(index, True)
         return
 
     def onPlay(self):
@@ -710,7 +708,15 @@ class SLWindow(qtw.QMainWindow):
             self.deleteBox(SLC.IdxLabel)
         elif SLC.IdxTrack != -1:
             idx = int(SLC.IdxTrack)
-            self.Side.QListTracker.removeItemWidget(self.ItemTracker[idx].Item)
+
+            l = self.Side.QListTracker.count()
+            for i in range(l):
+                item = self.Side.QListTracker.item(i)
+                if id(item) == id(self.ItemTracker[idx].Item):
+                    it = self.Side.QListTracker.takeItem(i)
+                    del it, item
+                    break
+            # self.Side.QListTracker.removeItemWidget(self.ItemTracker[idx].Item)
             self.deleteBox(idx, "Tracker")
             del SLC.DictTracker[idx]
         return
@@ -733,18 +739,27 @@ class SLWindow(qtw.QMainWindow):
         for box in self.ListBox:
             if not box.FlagUsed:
                 continue
-            label = box.Label
-            x, y, w, h = SLC.cvtoImageRect(*box.getRect())
-            if SLC.Data["FlagClip"]:
+            label = box.Index
+            x, y, w, h = box.getRect()
+            if SLC.Data["FlagClip"] and not SLC.FlagSetMode:
+                x, y, w, h = SLC.cvtoImageRect(x, y, w, h)
                 fx = (x - SLC.Data["Clip"][0] + w / 2) / SLC.Data["Clip"][2]
                 fy = (y - SLC.Data["Clip"][1] + w / 2) / SLC.Data["Clip"][3]
                 fw = w / SLC.Data["Clip"][2]
                 fh = h / SLC.Data["Clip"][3]
             else:
-                fx = (x + w / 2) / vw
-                fy = (y + h / 2) / vh
-                fw = w / vw
-                fh = h / vh
+                if SLC.FlagWidth:
+                    fx = (x + w / 2) / SLC.ScaledWidth
+                    fy = (
+                        y - (SLC.FrameHeight - SLC.ScaledHeight) / 2 + h / 2
+                    ) / SLC.ScaledHeight
+                else:
+                    fx = (
+                        x - (SLC.FrameWidth - SLC.ScaledWidth) / 2 + w / 2
+                    ) / SLC.ScaledWidth
+                    fy = (y + h / 2) / SLC.ScaledHeight
+                fw = w / SLC.ScaledWidth
+                fh = h / SLC.ScaledHeight
             lines.append(f"{label} {fx} {fy} {fw} {fh}\n")
 
         SLC.saveImage(lines)
@@ -819,7 +834,7 @@ class SLWindow(qtw.QMainWindow):
         return
 
     def hideAllBox(self):
-        for box in self.ListBox:
+        for box in self.ListBox + self.ListTrack:
             box.hide()
         return
 
