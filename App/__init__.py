@@ -4,4 +4,5 @@ from .core import *
 from .item import *
 from .box import *
 from .menu import *
+from .side import *
 from .gui import SLWindow

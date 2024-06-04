@@ -1,4 +1,7 @@
-import json, os, sys, random
+import json
+import os
+import sys
+import random
 import shutil
 import PyQt6.QtWidgets as qtw
 import cv2
@@ -26,9 +29,12 @@ class ShortLabelCore(object):
     def __init__(self) -> None:
         from . import VideoControl
 
+        print(sys.argv)
+
         self.Video: VideoControl = None
         self.VideoName = ""
         self.VideoFolder = ""
+        self.FlagVerify = False
 
         self.TrackerMethod = "CSRT"
 
@@ -57,6 +63,26 @@ class ShortLabelCore(object):
         self.ListImage: list[int] = list()
 
         return
+
+    def initAI(self, model, method):
+        from . import AIControl
+
+        self.AI = AIControl()
+        res = self.AI.init(model, method)
+        return res
+
+    def getAIStatus(self):
+        if "AI" in self.__dict__:
+            if self.AI.Process.poll() is None:
+                if self.AI.isIdle():
+                    ret = "Idle"
+                else:
+                    ret = "Busy"
+            else:
+                ret = "Failed"
+        else:
+            ret = "NotLoad"
+        return ret
 
     def isOpened(self):
         return self.Video is not None
@@ -176,7 +202,7 @@ class ShortLabelCore(object):
 
         return img
 
-    def saveImage(self, lines):
+    def saveImage(self, lines=None):
         if self.Video.Index not in self.ListImage:
             self.ListImage.append(self.Video.Index)
             self.ListImage.sort()
@@ -197,9 +223,10 @@ class ShortLabelCore(object):
                 img = img[y : y + h, x : x + w]
             cv2.imwrite(img_name, img)
 
-        with open(lbl_name, "w") as fd:
-            fd.writelines(lines)
-        return
+        if lines is not None:
+            with open(lbl_name, "w") as fd:
+                fd.writelines(lines)
+        return img_name
 
     def removeImage(self, index=-1):
         if index == -1:

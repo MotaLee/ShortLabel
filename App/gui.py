@@ -1,4 +1,6 @@
-import os, threading, time
+import os
+import threading
+import time
 
 import PyQt6.QtWidgets as qtw
 import PyQt6.QtGui as qtg
@@ -6,7 +8,7 @@ import PyQt6.QtCore as qtc
 from PyQt6.QtCore import Qt
 
 from . import getCore, LabelItem, TrackItem, LabelBox, CircleVariable
-from . import MainMenu
+from . import MainMenu, SideFrame
 
 SLC = getCore()
 
@@ -94,198 +96,6 @@ class ClipHandle(qtw.QLabel):
             SLC.Data["Clip"] = [rect[0], rect[1], w, h]
         SLC.Shell.showImage()
         SLC.Shell.changeBack("Unsaved")
-        return
-
-    pass
-
-
-class SideFrame(qtw.QTabWidget):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.TabLabel = qtw.QWidget(self)
-        self.TabAdv = qtw.QWidget(self)
-        self.TabAI = qtw.QWidget(self)
-
-        self.addTab(self.TabLabel, "标签")
-        self.addTab(self.TabAdv, "高级")
-        self.addTab(self.TabAI, "AI")
-
-        self.LblList = qtw.QLabel("标签列表", self.TabLabel)
-        self.BtnAdd = qtw.QPushButton("+", self.TabLabel)
-        self.BtnDel = qtw.QPushButton("-", self.TabLabel)
-        self.LblCrt = qtw.QLabel("当前：-1", self.TabLabel)
-        self.QListLabel = qtw.QListWidget(self.TabLabel)
-        self.TxtBox = qtw.QLabel("标注框：", self.TabLabel)
-        self.QListBox = qtw.QListWidget(self.TabLabel)
-        self.TxtImage = qtw.QLabel("图片文件：", self.TabLabel)
-        self.QListImage = qtw.QListWidget(self.TabLabel)
-
-        self.TxtClip = qtw.QLabel("裁剪大小：", self.TabAdv)
-        self.InputWidth = qtw.QLineEdit("1280", self.TabAdv)
-        self.InputWidth.setValidator(qtg.QIntValidator())
-        self.InputWidth.setMaximumWidth(50)
-        self.InputHeight = qtw.QLineEdit("720", self.TabAdv)
-        self.InputHeight.setValidator(qtg.QIntValidator())
-        self.InputHeight.setMaximumWidth(50)
-        self.BtnClip = qtw.QPushButton("确定", self.TabAdv)
-
-        self.ImgClip = qtw.QLabel(self.TabAdv)
-        self.ImgClip.setMinimumHeight(200)
-
-        self.TxtTracker = qtw.QLabel("追踪器：", self.TabAdv)
-        self.QListTracker = qtw.QListWidget(self.TabAdv)
-        self.TxtTemplate = qtw.QLabel("模板：", self.TabAdv)
-        self.QListTemplate = qtw.QListWidget(self.TabAdv)
-
-        self.TxtAI = qtw.QLabel("AI方法", self.TabAI)
-        self.CmbAI = qtw.QComboBox(self.TabAI)
-        self.CmbAI.addItem("Yolov5n")
-        self.CmbAI.addItem("Yolov5s")
-        self.CmbAI.addItem("Yolov8n")
-        self.CmbAI.addItem("GrondingDINO")
-        self.CmbAI.addItem("GrondingSAM")
-
-        lol_v1 = qtw.QVBoxLayout()
-        lol_h2 = qtw.QHBoxLayout()
-        lol_h2.addWidget(self.LblList)
-        lol_h2.addWidget(self.BtnAdd)
-        lol_h2.addWidget(self.BtnDel)
-        lol_h2.addWidget(self.LblCrt)
-        lol_v1.addLayout(lol_h2)
-        lol_v1.addWidget(self.QListLabel)
-        lol_v1.addWidget(self.TxtBox)
-        lol_v1.addWidget(self.QListBox)
-        lol_v1.addWidget(self.TxtImage)
-        lol_v1.addWidget(self.QListImage)
-        self.TabLabel.setLayout(lol_v1)
-
-        loa_v1 = qtw.QVBoxLayout()
-        loa_h2 = qtw.QHBoxLayout()
-        loa_v1.addLayout(loa_h2)
-        loa_h2.addWidget(self.TxtClip)
-        loa_h2.addWidget(self.InputWidth)
-        loa_h2.addWidget(qtw.QLabel("x", self.TabAdv))
-        loa_h2.addWidget(self.InputHeight)
-        loa_h2.addWidget(self.BtnClip)
-        loa_v1.addWidget(self.ImgClip)
-        loa_v1.addWidget(self.TxtTracker)
-        loa_v1.addWidget(self.QListTracker)
-        loa_v1.addWidget(self.TxtTemplate)
-        loa_v1.addWidget(self.QListTemplate)
-        self.TabAdv.setLayout(loa_v1)
-
-        loi_v1 = qtw.QVBoxLayout()
-        loi_h2 = qtw.QHBoxLayout()
-        loi_v1.addLayout(loi_h2)
-        loi_h2.addWidget(self.TxtAI)
-        loi_h2.addWidget(self.CmbAI)
-        self.TabAI.setLayout(loi_v1)
-
-        self.QListLabel.clicked.connect(self.onClickLabelList)
-        self.QListImage.clicked.connect(self.onClickImageList)
-        self.BtnAdd.clicked.connect(self.onAddLabel)
-        self.BtnDel.clicked.connect(self.onDelLabel)
-        self.BtnClip.clicked.connect(self.onClip)
-
-        self.setStyleSheet("QListWidget{border:2px solid #ddd;}")
-        return
-
-    def onClickLabelList(self):
-        c = self.QListLabel.currentRow()
-        if 0 <= c <= len(SLC.Shell.ItemLabel) - 1:
-            item: LabelItem = SLC.Shell.ItemLabel[c]
-        else:
-            item: LabelItem = SLC.Shell.ItemLabel[-1]
-        self.LblCrt.setText("当前：" + item.LabelIndex.text())
-        return
-
-    def onClickImageList(self):
-        index = int(self.QListImage.currentItem().text())
-        SLC.Shell.showImage(index, True)
-        return
-
-    def onAddLabel(self):
-        SLC.addLabel()
-        self.loadLabels()
-        return
-
-    def onDelLabel(self):
-        index = SLC.Shell.getCrtLabelIndex()
-        SLC.delLabel(index)
-        self.loadLabels()
-        return
-
-    def loadLabels(self, opt=None):
-        self.QListLabel.clear()
-        SLC.Shell.ItemLabel.clear()
-
-        if opt is None:
-            opt = SLC.Data["Class"]
-        for index, label in opt.items():
-            item = qtw.QListWidgetItem(self.QListLabel)
-            widget = LabelItem(
-                parent=self,
-                index=int(index),
-                label=label,
-                color=SLC.getColor(int(index)),
-                item=item,
-            )
-            self.QListLabel.setItemWidget(item, widget)
-            self.QListLabel.addItem(item)
-            SLC.Shell.ItemLabel.append(widget)
-        for box in SLC.Shell.ListBox:
-            if box.FlagUsed:
-                color = SLC.getColor(box.Index)
-                if color is not None:
-                    box.setColor(color)
-
-        self.onClickLabelList()
-        return
-
-    def loadImage(self):
-        self.QListImage.clear()
-        for image in os.listdir(f"{SLC.VideoFolder}/images"):
-            if "jpg" in image:
-                item = qtw.QListWidgetItem(image[: image.index(".")], self.QListImage)
-                self.QListImage.addItem(item)
-        return
-
-    def loadBox(self):
-        self.QListBox.clear()
-        for box in SLC.Shell.ListBox:
-            if box.FlagUsed:
-                item = qtw.QListWidgetItem(str(box.Index), self.QListBox)
-                self.QListBox.addItem(item)
-        return
-
-    def onClip(self):
-        x = SLC.Shell.Frame.HandClip1.geometry().x()
-        y = SLC.Shell.Frame.HandClip1.geometry().y()
-        rect = SLC.cvtoImageRect(
-            x, y, int(self.InputWidth.text()), int(self.InputHeight.text())
-        )
-        SLC.Data["Clip"] = [*rect]
-        SLC.Shell.showImage()
-        SLC.Shell.changeBack("Unsaved")
-        return
-
-    def addTrackItem(self, bid, index, roi):
-        color = SLC.getColor(index)
-        item = qtw.QListWidgetItem(self.QListTracker)
-        start = SLC.Video.Index
-        widget = TrackItem(
-            parent=self,
-            index=index,
-            bid=bid,
-            color=color,
-            method=SLC.TrackerMethod,
-            start=start,
-            item=item,
-        )
-        self.QListTracker.setItemWidget(item, widget)
-        self.QListTracker.addItem(item)
-        SLC.Shell.ItemTracker[bid] = widget
-        SLC.createTracker(tid=bid, method=SLC.TrackerMethod, roi=roi)
         return
 
     pass
@@ -644,7 +454,7 @@ class SLWindow(qtw.QMainWindow):
                 self.onSave()
 
         i = SLC.Video.Index
-        if SLC.Option["FlagVerify"]:
+        if SLC.FlagVerify:
             i = SLC.findNextImage(i)
             if i != -1:
                 self.showImage(i, True)
@@ -670,7 +480,7 @@ class SLWindow(qtw.QMainWindow):
                 self.onSave()
 
         i = SLC.Video.Index
-        if SLC.Option["FlagVerify"]:
+        if SLC.FlagVerify:
             i = SLC.findNextImage(i, False)
             if i != -1:
                 self.showImage(i, True)
@@ -762,11 +572,11 @@ class SLWindow(qtw.QMainWindow):
                 fh = h / SLC.ScaledHeight
             lines.append(f"{label} {fx} {fy} {fw} {fh}\n")
 
-        SLC.saveImage(lines)
+        img = SLC.saveImage(lines)
         SLC.saveOption()
         self.Side.loadImage()
         self.changeBack("Saved")
-        return
+        return img
 
     def getCrtLabelIndex(self):
         crt = self.Side.QListLabel.currentRow()
@@ -809,7 +619,7 @@ class SLWindow(qtw.QMainWindow):
                 box.select(False)
         return
 
-    def addBox(self, x, y, w, h, l, c):
+    def addBox(self, x, y, w, h, index, color):
         self.Frame.setToolTip(None)
         self.Frame.BoxTodo.hide()
 
@@ -818,7 +628,7 @@ class SLWindow(qtw.QMainWindow):
 
         for box in self.ListBox:
             if not box.FlagUsed:
-                box.useBox(x, y, w, h, c, l)
+                box.useBox(x, y, w, h, color, index)
                 break
 
         self.onCancel()

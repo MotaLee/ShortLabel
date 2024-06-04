@@ -160,7 +160,8 @@ class LabelBox(qtw.QLabel):
             h = self.geometry().height() + sy - self.SY
             self.Handle.setGeometry(w - 20, h - 20, 20, 20)
             self.setGeometry(x, y, w, h)
-            SLS.changeBack("Unsaved")
+            if self.BoxType == "Label":
+                SLS.changeBack("Unsaved")
         return
 
     def select(self, flag=True):

@@ -21,6 +21,7 @@ class MainMenu(qtw.QMenuBar):
         self.initFile()
         self.initEdit()
         self.initAdv()
+        self.initAI()
         self.initOpt()
 
         self.addMenu("帮助(H)")
@@ -181,6 +182,20 @@ class MainMenu(qtw.QMenuBar):
         self.MenuTrack.addAction(self.ActMOS)
         return
 
+    def initAI(self):
+        self.ActDetect = qtg.QAction("运行推理", self)
+        self.ActDetect.setShortcut("R")
+        self.ActDetect.triggered.connect(self.onDetect)
+
+        self.ActConti = qtg.QAction("连续运行", self)
+        self.ActConti.setShortcut("Ctrl+R")
+        self.ActConti.triggered.connect(self.onContinuousDetect)
+
+        self.MenuAI = self.addMenu("AI(I)")
+        self.MenuAI.addAction(self.ActDetect)
+        self.MenuAI.addAction(self.ActConti)
+        return
+
     def setMenuEnablity(self, flag=True):
         if flag:
             for act in self.MenuEdit.actions():
@@ -188,11 +203,17 @@ class MainMenu(qtw.QMenuBar):
 
             for act in self.MenuTrack.actions():
                 act.setEnabled(True)
+
+            for act in self.MenuAI.actions():
+                act.setEnabled(True)
         else:
             for act in self.MenuEdit.actions():
                 act.setDisabled(True)
 
             for act in self.MenuTrack.actions():
+                act.setDisabled(True)
+
+            for act in self.MenuAI.actions():
                 act.setDisabled(True)
 
     def onOpen(self):
@@ -210,7 +231,7 @@ class MainMenu(qtw.QMenuBar):
             self.setMenuEnablity()
             if SLC.Option["FlagAutoSave"]:
                 self.ActAuto.setChecked(True)
-            if SLC.Option["FlagVerify"]:
+            if SLC.FlagVerify:
                 self.ActVerifyMode.setChecked(True)
             if SLC.Data["FlagClip"]:
                 self.ActClip.setChecked(True)
@@ -236,11 +257,23 @@ class MainMenu(qtw.QMenuBar):
             if SLC.IdxTrack == -1:
                 return
             idx = SLC.IdxTrack
+        if not SLC.DictTracker[idx].FlagSuccess:
+            return
         tracker = SLC.Shell.ListTrack[idx]
         x = tracker.x() - 3
         y = tracker.y() - 3
         w = tracker.width() + 6
         h = tracker.height() + 6
+
+        if x < 0:
+            x = 0
+        if y < 0:
+            y = 0
+        if x + w > SLC.FrameWidth:
+            w = SLC.FrameWidth - x
+        if y + h > SLC.FrameHeight:
+            y = SLC.FrameHeight - y
+
         SLC.Shell.addBox(x, y, w, h, tracker.Index, tracker.Color)
         return
 
@@ -271,7 +304,7 @@ class MainMenu(qtw.QMenuBar):
         return
 
     def onVerifyMode(self):
-        SLC.Option["FlagVerify"] = not SLC.Option["FlagVerify"]
+        SLC.FlagVerify = not SLC.FlagVerify
         return
 
     def onCreateTracker(self):
@@ -317,6 +350,30 @@ class MainMenu(qtw.QMenuBar):
         else:
             SLC.Shell.ItemTracker[SLC.IdxTrack].BtnEna.toggle()
             SLC.IdxTrack = -1
+        return
+
+    def onDetect(self):
+        if "Idle" != SLC.getAIStatus():
+            return
+
+        img = SLC.Shell.onSave()
+        SLC.Shell.Side.TxtAIHint.setText("模型运行中……")
+
+        def recall(ret):
+            SLC.Shell.Side.TxtAIHint.setText("模型运行完成。")
+            boxes = ret["Boxes"]
+            for box in boxes:
+                index = box[0]
+                x, y, w, h = box[2:]
+                x, y, w, h = SLC.cvtoFrameRect(x, y, w, h, True)
+                SLC.Shell.addBox(x, y, w, h, index, SLC.getColor(index))
+            return
+
+        SLC.AI.detect(img, recall)
+        return
+
+    def onContinuousDetect(self):
+        "todo"
         return
 
     pass
