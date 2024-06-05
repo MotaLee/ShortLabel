@@ -1,5 +1,5 @@
 {
-    "FlagAutoSave": false,
+    "FlagAutoSave": true,
     "FlagVerify": false,
-    "PythonPath":"C:\\Work\\PythonVG\\Scripts\\python.exe"
+    "PythonPath": "C:\\Work\\PythonVG\\Scripts\\python.exe"
 }

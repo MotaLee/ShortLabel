@@ -166,6 +166,7 @@ class Yolov5:
             )
 
         seen = 0
+        boxes = []
         for path, img, im0s, vid_cap in dataset:
             img = torch.from_numpy(img).to(self.Device)
             img = img.float() / 255.0
@@ -192,7 +193,6 @@ class Yolov5:
                         img.shape[2:], det[:, :4], im0.shape
                     ).round()
 
-                    boxes = []
                     for *xyxy, conf, cls in reversed(det):
                         xywh = (
                             (xyxy2xywh(torch.tensor(xyxy).view(1, 4)) / gn)

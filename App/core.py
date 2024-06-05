@@ -27,11 +27,11 @@ class CircleVariable(object):
 
 class ShortLabelCore(object):
     def __init__(self) -> None:
-        from . import VideoControl
+        # from . import VideoControl
 
         print(sys.argv)
 
-        self.Video: VideoControl = None
+        self.Video = None
         self.VideoName = ""
         self.VideoFolder = ""
         self.FlagVerify = False
@@ -73,7 +73,9 @@ class ShortLabelCore(object):
 
     def getAIStatus(self):
         if "AI" in self.__dict__:
-            if self.AI.Process.poll() is None:
+            if self.AI.Process is None:
+                ret = "NotLoad"
+            elif self.AI.Process.poll() is None:
                 if self.AI.isIdle():
                     ret = "Idle"
                 else:

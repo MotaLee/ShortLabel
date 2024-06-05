@@ -450,7 +450,7 @@ class SLWindow(qtw.QMainWindow):
         self.FlagDeal = True
 
         if SLC.Option["FlagAutoSave"]:
-            if len(self.Side.QListBox.items()) > 0:
+            if len(self.Side.QListBox.items(None)) > 0:
                 self.onSave()
 
         i = SLC.Video.Index
@@ -476,7 +476,7 @@ class SLWindow(qtw.QMainWindow):
         self.FlagDeal = True
 
         if SLC.Option["FlagAutoSave"]:
-            if len(self.Side.QListBox.items()) > 0:
+            if len(self.Side.QListBox.items(None)) > 0:
                 self.onSave()
 
         i = SLC.Video.Index

@@ -1,6 +1,6 @@
 from .utility import *
-from .video import *
 from .core import *
+from .video import *
 from .item import *
 from .box import *
 from .menu import *
