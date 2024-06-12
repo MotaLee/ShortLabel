@@ -250,7 +250,12 @@ class SLWindow(qtw.QMainWindow):
         self.ListTrack: list[LabelBox]
         self.Speed = 1
         self.ColorBorder = "#555"
+
         return
+
+    def closeEvent(self, e):
+        SLC.AI.deinit()
+        return super().closeEvent(e)
 
     def switchStatus(self, status):
         if status == "StartPoint":
@@ -304,7 +309,7 @@ class SLWindow(qtw.QMainWindow):
 
         self.Side = SideFrame(self.Widget)
 
-        self.ListBox = [LabelBox(self.Frame.Image, i) for i in range(16)]
+        self.ListBox = [LabelBox(self.Frame.Image, i) for i in range(32)]
         self.ListTrack = [LabelBox(self.Frame.Image, i, "Track") for i in range(8)]
 
         layout_v1 = qtw.QVBoxLayout()

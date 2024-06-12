@@ -1,9 +1,12 @@
 import json
+import os
 import subprocess as sp
 import threading
 import time
 import _winapi
 import msvcrt
+
+import requests
 
 import cv2
 
@@ -96,18 +99,24 @@ class AIControl:
         try:
             if self.Method == "Yolov5":
                 cmd = [
-                    SLC.Option["PythonPath"],
-                    "./Lib/Yolov5/SLYolov5.py",
+                    "python",
+                    "VS.py",
                     "--weights",
                     self.ModelPath,
                 ]
-                self.Process = sp.Popen(cmd, stdin=sp.PIPE, stdout=sp.PIPE)
-                self.HandleIn = msvcrt.get_osfhandle(self.Process.stdin.fileno())
-                self.HandleOut = msvcrt.get_osfhandle(self.Process.stdout.fileno())
+                cwd = os.getcwd() + "\\..\\ViServer"
+                self.Process = sp.Popen(cmd, shell=True, cwd=cwd)
+                # self.HandleIn = msvcrt.get_osfhandle(self.Process.stdin.fileno())
+                # self.HandleOut = msvcrt.get_osfhandle(self.Process.stdout.fileno())
         except BaseException as e:
             print(e)
             return False
         return True
+
+    def deinit(self):
+        if self.Process is not None:
+            self.Process.kill()
+        return
 
     def detect(self, img, recall=None):
         self.Recall = recall
@@ -137,25 +146,17 @@ class AIControl:
         return ret
 
     def isIdle(self):
-        self.writeInDict({"Command": "isIdle"})
-        ctr = 3
-        flag_idle = False
-        while ctr >= 0:
-            ctr -= 1
-            time.sleep(0.1)
-            try:
-                data = self.readOut()
-                if data is not None:
-                    jret = json.loads(data)
-                    if jret["Return"] == True:
-                        flag_idle = True
-                        break
-                    else:
-                        flag_idle = False
-                        break
-            except BaseException as e:
-                pass
-        return flag_idle
+        try:
+            res = requests.post(
+                "http://127.0.0.1:5005/Command", data={"Command": "isIdle"}
+            )
+            jret = res.json()
+            if jret["Return"] == 0:
+                return True
+        except BaseException as e:
+            print(e)
+            return False
+        return False
 
     def threadDetect(self):
         if self.FlagBusy:
@@ -163,27 +164,17 @@ class AIControl:
         else:
             self.FlagBusy = True
 
-        idle = False
-        while not idle:
-            idle = self.isIdle()
+        try:
+            res = requests.post(
+                "http://127.0.0.1:5005/Command",
+                data={"Command": "detect", "Source": self.Source},
+            )
 
-        flag_finish = False
-        while not flag_finish:
-
-            self.writeInDict({"Command": "detect", "Source": self.Source})
-            time.sleep(1)
-
-            data = self.readOut()
-            if data is not None:
-                try:
-                    jret = json.loads(data)
-                except BaseException as e:
-                    continue
-                if "Result" in jret:
-                    if jret["Result"] == True:
-                        flag_finish = True
-                        if self.Recall is not None:
-                            self.Recall(jret)
+            j = res.json()
+            if self.Recall is not None:
+                self.Recall(j)
+        except BaseException as e:
+            print(e)
 
         self.FlagBusy = False
 
